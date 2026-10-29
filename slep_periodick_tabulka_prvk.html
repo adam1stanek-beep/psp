@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interaktivní Periodická Tabulka – Slepá tabulka</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+
+        /* Mřížka periodické tabulky (18 sloupců) */
+        .ptable-grid {
+            display: grid;
+            grid-template-columns: 28px repeat(18, minmax(42px, 1fr));
+            gap: 4px;
+            min-width: 860px;
+        }
+
+        .element-cell {
+            aspect-ratio: 1 / 1.08;
+            transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            position: relative;
+        }
+
+        .element-cell.targetable:hover {
+            transform: translateY(-2px) scale(1.06);
+            z-index: 20;
+            box-shadow: 0 8px 20px -4px rgba(56, 189, 248, 0.45);
+            border-color: #38bdf8;
+        }
+
+        @keyframes pulseWrong {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); background-color: rgba(239, 68, 68, 0.6); }
+            75% { transform: translateX(4px); background-color: rgba(239, 68, 68, 0.6); }
+        }
+
+        @keyframes popCorrect {
+            0% { transform: scale(0.85); }
+            50% { transform: scale(1.12); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes blinkTarget {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.8); border-color: #38bdf8; }
+            50% { box-shadow: 0 0 0 10px rgba(56, 189, 248, 0); border-color: #f8fafc; }
+        }
+
+        .anim-wrong {
+            animation: pulseWrong 0.35s ease-in-out;
+        }
+
+        .anim-correct {
+            animation: popCorrect 0.3s ease-out;
+        }
+
+        .target-highlight {
+            animation: blinkTarget 1.5s infinite;
+            background-color: rgba(56, 189, 248, 0.25) !important;
+            border-color: #38bdf8 !important;
+            z-index: 10;
+        }
+
+        /* Barevné kategorie prvků */
+        .cat-alkali { background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.5); }
+        .cat-alkaline { background: rgba(249, 115, 22, 0.18); border-color: rgba(249, 115, 22, 0.5); }
+        .cat-transition { background: rgba(234, 179, 8, 0.16); border-color: rgba(234, 179, 8, 0.45); }
+        .cat-post-transition { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.5); }
+        .cat-metalloid { background: rgba(20, 184, 166, 0.22); border-color: rgba(20, 184, 166, 0.55); }
+        .cat-nonmetal { background: rgba(59, 130, 246, 0.22); border-color: rgba(59, 130, 246, 0.55); }
+        .cat-halogen { background: rgba(139, 92, 246, 0.22); border-color: rgba(139, 92, 246, 0.55); }
+        .cat-noble { background: rgba(236, 72, 153, 0.22); border-color: rgba(236, 72, 153, 0.55); }
+        .cat-lanthanide { background: rgba(168, 85, 247, 0.18); border-color: rgba(168, 85, 247, 0.45); }
+        .cat-actinide { background: rgba(244, 63, 94, 0.18); border-color: rgba(244, 63, 94, 0.45); }
+
+        .cat-solved.cat-alkali { background: rgba(239, 68, 68, 0.42); border-color: #ef4444; }
+        .cat-solved.cat-alkaline { background: rgba(249, 115, 22, 0.42); border-color: #f97316; }
+        .cat-solved.cat-transition { background: rgba(234, 179, 8, 0.38); border-color: #eab308; }
+        .cat-solved.cat-post-transition { background: rgba(16, 185, 129, 0.42); border-color: #10b981; }
+        .cat-solved.cat-metalloid { background: rgba(20, 184, 166, 0.45); border-color: #14b8a6; }
+        .cat-solved.cat-nonmetal { background: rgba(59, 130, 246, 0.45); border-color: #3b82f6; }
+        .cat-solved.cat-halogen { background: rgba(139, 92, 246, 0.45); border-color: #8b5cf6; }
+        .cat-solved.cat-noble { background: rgba(236, 72, 153, 0.45); border-color: #ec4899; }
+        .cat-solved.cat-lanthanide { background: rgba(168, 85, 247, 0.42); border-color: #a855f7; }
+        .cat-solved.cat-actinide { background: rgba(244, 63, 94, 0.42); border-color: #f43f5e; }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-3 md:p-6">
+
+    <!-- Hlavička a ovládací panel -->
+    <header class="max-w-7xl w-full mx-auto mb-4">
+        <div class="bg-slate-800/90 border border-slate-700 rounded-2xl p-4 shadow-xl backdrop-blur-sm">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <h1 class="text-xl md:text-2xl font-extrabold bg-gradient-to-r from-sky-400 via-indigo-400 to-emerald-400 bg-clip-text text-transparent">
+                        Úplně slepá tabulka – Napiš, co patří do políčka
+                    </h1>
+                    <p class="text-xs md:text-sm text-slate-400 mt-0.5">
+                        Tabulka je prázdná. Sleduj blikající políčko a zapiš jeho značku nebo název!
+                    </p>
+                </div>
+
+                <!-- Nastavení režimu -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <!-- Výběr rozsahu prvků -->
+                    <select id="scopeSelect" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs md:text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-sky-500">
+                        <option value="common">Základní a běžné prvky (42 prvků)</option>
+                        <option value="sp_block">Pouze s-blok a p-blok (nepřechodné)</option>
+                        <option value="d_block">Přechodné kovy (d-blok)</option>
+                        <option value="cations">Speciál: Kationtové skupiny (CO²⁺, SO²⁺, UO₂²⁺...)</option>
+                        <option value="all">Celá tabulka (všech 118 prvků)</option>
+                    </select>
+
+                    <button id="cationModalBtn" class="bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/50 text-indigo-200 font-semibold text-xs md:text-sm px-3 py-2 rounded-xl transition">
+                        📋 Přehled skupin
+                    </button>
+
+                    <button id="restartBtn" class="bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-semibold text-xs md:text-sm px-4 py-2 rounded-xl transition shadow-lg shadow-sky-600/25">
+                        Nová hra
+                    </button>
+                </div>
+            </div>
+
+            <!-- Panel pro zadání odpovědi k blikajícímu políčku -->
+            <div id="quizBanner" class="mt-4 pt-4 border-t border-slate-700/80 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-4 w-full md:w-auto justify-center md:justify-start">
+                    <div class="bg-slate-900 border-2 border-sky-500/70 rounded-2xl px-5 py-3 text-center min-w-[280px] shadow-inner">
+                        <div id="promptLabel" class="text-[11px] uppercase tracking-wider text-sky-400 font-semibold">
+                            Zapiš značku nebo název pro blikající políčko:
+                        </div>
+                        <form id="answerForm" class="mt-2 flex gap-2">
+                            <input type="text" id="userInput" placeholder="např. Fe nebo Železo" autocomplete="off" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none focus:border-sky-500">
+                            <button type="submit" class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-1.5 rounded-xl transition">Ověřit</button>
+                        </form>
+                        <div id="targetSubHint" class="text-xs text-slate-400 mt-1.5 hidden"></div>
+                    </div>
+
+                    <div class="flex flex-col gap-1.5">
+                        <button id="hintBtn" class="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-xs font-medium px-3 py-1.5 rounded-lg transition">
+                            💡 Nápověda
+                        </button>
+                        <button id="skipBtn" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium px-3 py-1.5 rounded-lg transition">
+                            ⏭️ Přeskočit
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Statistiky -->
+                <div class="flex items-center gap-4 md:gap-6 text-xs md:text-sm bg-slate-900/90 px-4 py-2.5 rounded-xl border border-slate-700">
+                    <div class="text-center">
+                        <div class="text-slate-400 text-[11px]">Hotovo</div>
+                        <div class="font-bold text-base text-emerald-400"><span id="statSolved">0</span> / <span id="statTotal">0</span></div>
+                    </div>
+                    <div class="h-7 w-px bg-slate-700"></div>
+                    <div class="text-center">
+                        <div class="text-slate-400 text-[11px]">Úspěšnost</div>
+                        <div id="statAccuracy" class="font-bold text-base text-sky-400">100 %</div>
+                    </div>
+                    <div class="h-7 w-px bg-slate-700"></div>
+                    <div class="text-center">
+                        <div class="text-slate-400 text-[11px]">Série bez chyby</div>
+                        <div id="statStreak" class="font-bold text-base text-amber-400">0 🔥</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stavová zpráva (zpětná vazba) -->
+            <div id="feedbackMessage" class="mt-2 text-center text-xs md:text-sm font-medium min-h-[20px] text-slate-300">
+                V tabulce bliká políčko, které máš vyplnit. Zadej odpověď do políčka výše.
+            </div>
+        </div>
+    </header>
+
+    <!-- Hlavní kontejner s tabulkou -->
+    <main class="max-w-7xl w-full mx-auto flex-1 overflow-x-auto custom-scrollbar pb-4">
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 md:p-5 shadow-2xl min-w-[890px]">
+            <!-- Mřížka periodické tabulky -->
+            <div id="ptableContainer" class="ptable-grid"></div>
+        </div>
+    </main>
+
+    <!-- Legenda skupin a přehled kationtových skupin -->
+    <footer class="max-w-7xl w-full mx-auto mt-2 grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Legenda barev -->
+        <div class="lg:col-span-2 bg-slate-800/70 border border-slate-700/80 rounded-2xl p-3.5 text-xs">
+            <div class="font-semibold text-slate-300 mb-2">Barevné rozdělení skupin prvků:</div>
+            <div class="flex flex-wrap gap-2">
+                <span class="px-2.5 py-1 rounded-lg border cat-alkali text-red-200">Alkalické kovy (I.A)</span>
+                <span class="px-2.5 py-1 rounded-lg border cat-alkaline text-orange-200">Kovy alk. zemin (II.A)</span>
+                <span class="px-2.5 py-1 rounded-lg border cat-transition text-yellow-200">Přechodné kovy (d-blok)</span>
+                <span class="px-2.5 py-1 rounded-lg border cat-post-transition text-emerald-200">Nepřechodné kovy</span>
+                <span class="px-2.5 py-1 rounded-lg border cat-metalloid text-teal-200">Polokovy</span>
+                <span class="px-2.5 py-1 rounded-lg border cat-nonmetal text-blue-200">Nekovy</span>
+                <span class="px-2.5 py-1 rounded-lg border cat-halogen text-violet-200">Halogeny (VII.A)</span>
+                <span class="px-2.5 py-1 rounded-lg border cat-noble text-pink-200">Vzácné plyny (VIII.A)</span>
+                <span class="px-2.5 py-1 rounded-lg border cat-lanthanide text-purple-200">Lanthanoidy</span>
+                <span class="px-2.5 py-1 rounded-lg border cat-actinide text-rose-200">Aktinoidy</span>
+            </div>
+        </div>
+
+        <!-- Detail vybraného prvku -->
+        <div id="elementDetailBox" class="bg-slate-800/70 border border-slate-700/80 rounded-2xl p-3.5 text-xs flex flex-col justify-center">
+            <div class="font-semibold text-sky-400 mb-1">Detail políčka:</div>
+            <div id="detailContent" class="text-slate-300">
+                Klikni na libovolné políčko v tabulce pro zobrazení jeho podrobností.
+            </div>
+        </div>
+    </footer>
+
+    <!-- Modální okno s přehledem kationtových skupin -->
+    <div id="cationModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-600 rounded-2xl max-w-2xl w-full p-5 shadow-2xl">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-700">
+                <h2 class="text-lg font-extrabold text-white">Přehled kationtových atomových skupin</h2>
+                <button id="closeCationModalBtn" class="text-slate-400 hover:text-white text-sm font-bold px-2.5 py-1 rounded-lg bg-slate-700/60">✕ Zavřít</button>
+            </div>
+            <p class="text-xs text-slate-300 mt-2 mb-3">
+                Tyto skupiny jsou propojeny s ústředními prvky v tabulce.
+            </p>
+            <div id="cationListGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto pr-1"></div>
+        </div>
+    </div>
+
+    <script>
+        const RAW_ELEMENTS = [
+            [1, "H", "Vodík", 1, 1, "nonmetal", true],
+            [2, "He", "Helium", 1, 18, "noble", true],
+            [3, "Li", "Lithium", 2, 1, "alkali", true],
+            [4, "Be", "Beryllium", 2, 2, "alkaline", true],
+            [5, "B", "Bor", 2, 13, "metalloid", true],
+            [6, "C", "Uhlík", 2, 14, "nonmetal", true],
+            [7, "N", "Dusík", 2, 15, "nonmetal", true],
+            [8, "O", "Kyslík", 2, 16, "nonmetal", true],
+            [9, "F", "Fluor", 2, 17, "halogen", true],
+            [10, "Ne", "Neon", 2, 18, "noble", true],
+            [11, "Na", "Sodík", 3, 1, "alkali", true],
+            [12, "Mg", "Hořčík", 3, 2, "alkaline", true],
+            [13, "Al", "Hliník", 3, 13, "post-transition", true],
+            [14, "Si", "Křemík", 3, 14, "metalloid", true],
+            [15, "P", "Fosfor", 3, 15, "nonmetal", true],
+            [16, "S", "Síra", 3, 16, "nonmetal", true],
+            [17, "Cl", "Chlor", 3, 17, "halogen", true],
+            [18, "Ar", "Argon", 3, 18, "noble", true],
+            [19, "K", "Draslík", 4, 1, "alkali", true],
+            [20, "Ca", "Vápník", 4, 2, "alkaline", true],
+            [21, "Sc", "Skandium", 4, 3, "transition", false],
+            [22, "Ti", "Titan", 4, 4, "transition", true],
+            [23, "V", "Vanad", 4, 5, "transition", true],
+            [24, "Cr", "Chrom", 4, 6, "transition", true],
+            [25, "Mn", "Mangan", 4, 7, "transition", true],
+            [26, "Fe", "Železo", 4, 8, "transition", true],
+            [27, "Co", "Kobalt", 4, 9, "transition", true],
+            [28, "Ni", "Nikl", 4, 10, "transition", true],
+            [29, "Cu", "Měď", 4, 11, "transition", true],
+            [30, "Zn", "Zinek", 4, 12, "transition", true],
+            [31, "Ga", "Gallium", 4, 13, "post-transition", false],
+            [32, "Ge", "Germanium", 4, 14, "metalloid", false],
+            [33, "As", "Arsen", 4, 15, "metalloid", true],
+            [34, "Se", "Selen", 4, 16, "nonmetal", true],
+            [35, "Br", "Brom", 4, 17, "halogen", true],
+            [36, "Kr", "Krypton", 4, 18, "noble", true],
+            [37, "Rb", "Rubidium", 5, 1, "alkali", false],
+            [38, "Sr", "Stroncium", 5, 2, "alkaline", false],
+            [39, "Y", "Yttrium", 5, 3, "transition", false],
+            [40, "Zr", "Zirkonium", 5, 4, "transition", false],
+            [41, "Nb", "Niob", 5, 5, "transition", false],
+            [42, "Mo", "Molybden", 5, 6, "transition", false],
+            [43, "Tc", "Technecium", 5, 7, "transition", false],
+            [44, "Ru", "Ruthenium", 5, 8, "transition", false],
+            [45, "Rh", "Rhodium", 5, 9, "transition", false],
+            [46, "Pd", "Palladium", 5, 10, "transition", false],
+            [47, "Ag", "Stříbro", 5, 11, "transition", true],
+            [48, "Cd", "Kadmium", 5, 12, "transition", true],
+            [49, "In", "Indium", 5, 13, "post-transition", false],
+            [50, "Sn", "Cín", 5, 14, "post-transition", true],
+            [51, "Sb", "Antimon", 5, 15, "metalloid", true],
+            [52, "Te", "Tellur", 5, 16, "metalloid", false],
+            [53, "I", "Jod", 5, 17, "halogen", true],
+            [54, "Xe", "Xenon", 5, 18, "noble", true],
+            [55, "Cs", "Cesium", 6, 1, "alkali", false],
+            [56, "Ba", "Baryum", 6, 2, "alkaline", true],
+            [57, "La", "Lanthan", 9, 3, "lanthanide", false],
+            [58, "Ce", "Cer", 9, 4, "lanthanide", false],
+            [59, "Pr", "Praseodym", 9, 5, "lanthanide", false],
+            [60, "Nd", "Neodym", 9, 6, "lanthanide", false],
+            [61, "Pm", "Promethium", 9, 7, "lanthanide", false],
+            [62, "Sm", "Samarium", 9, 8, "lanthanide", false],
+            [63, "Eu", "Europium", 9, 9, "lanthanide", false],
+            [64, "Gd", "Gadolinium", 9, 10, "lanthanide", false],
+            [65, "Tb", "Terbium", 9, 11, "lanthanide", false],
+            [66, "Dy", "Dysprosium", 9, 12, "lanthanide", false],
+            [67, "Ho", "Holmium", 9, 13, "lanthanide", false],
+            [68, "Er", "Erbium", 9, 14, "lanthanide", false],
+            [69, "Tm", "Thulium", 9, 15, "lanthanide", false],
+            [70, "Yb", "Ytterbium", 9, 16, "lanthanide", false],
+            [71, "Lu", "Lutecium", 9, 17, "lanthanide", false],
+            [72, "Hf", "Hafnium", 6, 4, "transition", false],
+            [73, "Ta", "Tantal", 6, 5, "transition", false],
+            [74, "W", "Wolfram", 6, 6, "transition", true],
+            [75, "Re", "Rhenium", 6, 7, "transition", false],
+            [76, "Os", "Osmium", 6, 8, "transition", false],
+            [77, "Ir", "Iridium", 6, 9, "transition", false],
+            [78, "Pt", "Platina", 6, 10, "transition", true],
+            [79, "Au", "Zlato", 6, 11, "transition", true],
+            [80, "Hg", "Rtuť", 6, 12, "transition", true],
+            [81, "Tl", "Thallium", 6, 13, "post-transition", false],
+            [82, "Pb", "Olovo", 6, 14, "post-transition", true],
+            [83, "Bi", "Bismut", 6, 15, "post-transition", true],
+            [84, "Po", "Polonium", 6, 16, "post-transition", false],
+            [85, "At", "Astat", 6, 17, "halogen", false],
+            [86, "Rn", "Radon", 6, 18, "noble", true],
+            [87, "Fr", "Francium", 7, 1, "alkali", false],
+            [88, "Ra", "Radium", 7, 2, "alkaline", false],
+            [89, "Ac", "Aktinium", 10, 3, "actinide", false],
+            [90, "Th", "Thorium", 10, 4, "actinide", false],
+            [91, "Pa", "Protaktinium", 10, 5, "actinide", false],
+            [92, "U", "Uran", 10, 6, "actinide", true],
+            [93, "Np", "Neptunium", 10, 7, "actinide", false],
+            [94, "Pu", "Plutonium", 10, 8, "actinide", false],
+            [95, "Am", "Americium", 10, 9, "actinide", false],
+            [96, "Cm", "Curium", 10, 10, "actinide", false],
+            [97, "Bk", "Berkelium", 10, 11, "actinide", false],
+            [98, "Cf", "Kalifornium", 10, 12, "actinide", false],
+            [99, "Es", "Einsteinium", 10, 13, "actinide", false],
+            [100, "Fm", "Fermium", 10, 14, "actinide", false],
+            [101, "Md", "Mendelevium", 10, 15, "actinide", false],
+            [102, "No", "Nobelium", 10, 16, "actinide", false],
+            [103, "Lr", "Lawrencium", 10, 17, "actinide", false],
+            [104, "Rf", "Rutherfordium", 7, 4, "transition", false],
+            [105, "Db", "Dubnium", 7, 5, "transition", false],
+            [106, "Sg", "Seaborgium", 7, 6, "transition", false],
+            [107, "Bh", "Bohrium", 7, 7, "transition", false],
+            [108, "Hs", "Hassium", 7, 8, "transition", false],
+            [109, "Mt", "Meitnerium", 7, 9, "transition", false],
+            [110, "Ds", "Darmstadtium", 7, 10, "transition", false],
+            [111, "Rg", "Roentgenium", 7, 11, "transition", false],
+            [112, "Cn", "Kopernicium", 7, 12, "transition", false],
+            [113, "Nh", "Nihonium", 7, 13, "post-transition", false],
+            [114, "Fl", "Flerovium", 7, 14, "post-transition", false],
+            [115, "Mc", "Moskovium", 7, 15, "post-transition", false],
+            [116, "Lv", "Livermorium", 7, 16, "post-transition", false],
+            [117, "Ts", "Tennessin", 7, 17, "halogen", false],
+            [118, "Og", "Oganesson", 7, 18, "noble", false]
+        ];
+
+        const CATION_GROUPS = [
+            { z: 6, formula: "CO²⁺", name: "karbonyl (2+)", elementName: "Uhlík (C)" },
+            { z: 7, formula: "NO⁺", name: "nitrosyl (+)", elementName: "Dusík (N)" },
+            { z: 7, formula: "NO₂⁺", name: "nitryl (+)", elementName: "Dusík (N)" },
+            { z: 16, formula: "SO²⁺", name: "thionyl (2+)", elementName: "Síra (S)" },
+            { z: 16, formula: "SO₂²⁺", name: "sulfuryl (2+)", elementName: "Síra (S)" },
+            { z: 16, formula: "S₂O₅²⁺", name: "disulfuryl (2+)", elementName: "Síra (S)" },
+            { z: 15, formula: "PO³⁺", name: "fosforyl (3+)", elementName: "Fosfor (P)" },
+            { z: 15, formula: "PS³⁺", name: "thiofosforyl (3+)", elementName: "Fosfor (P)" },
+            { z: 92, formula: "UO₂⁺ / UO₂²⁺", name: "uranyl (+ nebo 2+)", elementName: "Uran (U)" },
+            { z: 24, formula: "CrO₂²⁺", name: "chromyl (2+)", elementName: "Chrom (Cr)" },
+            { z: 23, formula: "VO²⁺", name: "vanadyl (2+)", elementName: "Vanad (V)" },
+            { z: 17, formula: "ClO⁺", name: "chlorosyl (+)", elementName: "Chlor (Cl)" },
+            { z: 17, formula: "ClO₂⁺", name: "chloryl (+)", elementName: "Chlor (Cl)" },
+            { z: 17, formula: "ClO₃⁺", name: "perchloryl (+)", elementName: "Chlor (Cl)" }
+        ];
+
+        const ELEMENTS = RAW_ELEMENTS.map(item => ({
+            z: item[0],
+            symbol: item[1],
+            name: item[2],
+            row: item[3],
+            col: item[4],
+            category: item[5],
+            common: item[6],
+            cations: CATION_GROUPS.filter(c => c.z === item[0])
+        }));
+
+        const ROMAN_GROUPS = [
+            "I.A", "II.A", "III.B", "IV.B", "V.B", "VI.B", "VII.B", "VIII.B", "VIII.B", "VIII.B",
+            "I.B", "II.B", "III.A", "IV.A", "V.A", "VI.A", "VII.A", "VIII.A"
+        ];
+
+        let state = {
+            scope: "common",
+            queue: [],
+            currentItem: null,
+            solvedZ: new Set(),
+            attempts: 0,
+            correctHits: 0,
+            streak: 0,
+            hintLevel: 0
+        };
+
+        const ptableContainer = document.getElementById('ptableContainer');
+        const scopeSelect = document.getElementById('scopeSelect');
+        const restartBtn = document.getElementById('restartBtn');
+        const hintBtn = document.getElementById('hintBtn');
+        const skipBtn = document.getElementById('skipBtn');
+        const promptLabel = document.getElementById('promptLabel');
+        const userInput = document.getElementById('userInput');
+        const answerForm = document.getElementById('answerForm');
+        const targetSubHint = document.getElementById('targetSubHint');
+        const feedbackMessage = document.getElementById('feedbackMessage');
+        const statSolved = document.getElementById('statSolved');
+        const statTotal = document.getElementById('statTotal');
+        const statAccuracy = document.getElementById('statAccuracy');
+        const statStreak = document.getElementById('statStreak');
+        const detailContent = document.getElementById('detailContent');
+        const cationModalBtn = document.getElementById('cationModalBtn');
+        const cationModal = document.getElementById('cationModal');
+        const closeCationModalBtn = document.getElementById('closeCationModalBtn');
+        const cationListGrid = document.getElementById('cationListGrid');
+
+        function renderCationModalList() {
+            cationListGrid.innerHTML = CATION_GROUPS.map(c => `
+                <div class="flex items-center justify-between bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2 text-xs">
+                    <div>
+                        <span class="font-extrabold text-sky-400 text-sm">${c.formula}</span>
+                        <span class="text-white font-semibold ml-2">${c.name}</span>
+                    </div>
+                    <span class="text-slate-400 text-[11px] bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">${c.elementName}</span>
+                </div>
+            `).join("");
+        }
+
+        cationModalBtn.addEventListener('click', () => {
+            renderCationModalList();
+            cationModal.classList.remove('hidden');
+            cationModal.classList.add('flex');
+        });
+
+        closeCationModalBtn.addEventListener('click', () => {
+            cationModal.classList.add('hidden');
+            cationModal.classList.remove('flex');
+        });
+
+        function shuffleArray(arr) {
+            const copy = [...arr];
+            for (let i = copy.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [copy[i], copy[j]] = [copy[j], copy[i]];
+            }
+            return copy;
+        }
+
+        function isElementInScope(el) {
+            if (state.scope === "all") return true;
+            if (state.scope === "common") return el.common;
+            if (state.scope === "sp_block") return (el.col <= 2 || el.col >= 13) && el.row <= 7;
+            if (state.scope === "d_block") return el.col >= 3 && el.col <= 12 && el.row <= 7;
+            if (state.scope === "cations") return el.cations.length > 0;
+            return true;
+        }
+
+        function buildQueue() {
+            state.solvedZ.clear();
+            state.attempts = 0;
+            state.correctHits = 0;
+            state.streak = 0;
+            state.hintLevel = 0;
+
+            const filtered = ELEMENTS.filter(isElementInScope);
+            state.queue = shuffleArray(filtered.map(el => el.z));
+
+            statTotal.textContent = state.queue.length;
+            nextQuestion();
+            renderTable();
+            updateStats();
+        }
+
+        function nextQuestion() {
+            state.hintLevel = 0;
+            targetSubHint.classList.add('hidden');
+            targetSubHint.textContent = "";
+            userInput.value = "";
+            userInput.focus();
+
+            if (state.queue.length === 0) {
+                state.currentItem = null;
+                promptLabel.textContent = "Skvělá práce!";
+                userInput.disabled = true;
+                feedbackMessage.innerHTML = `<span class="text-emerald-400 font-semibold">Gratuluji! Úspěšně jśi vyplnil(a) všechna políčka v této sadě.</span>`;
+                renderTable();
+                return;
+            }
+
+            state.currentItem = state.queue[0];
+            renderTable();
+        }
+
+        function updateStats() {
+            const total = parseInt(statTotal.textContent) || 0;
+            const solvedCount = total - state.queue.length;
+            statSolved.textContent = solvedCount;
+            const acc = state.attempts === 0 ? 100 : Math.round((state.correctHits / state.attempts) * 100);
+            statAccuracy.textContent = `${acc} %`;
+            statStreak.textContent = `${state.streak} 🔥`;
+        }
+
+        function showElementDetails(el) {
+            let cationHtml = "";
+            if (el.cations.length > 0) {
+                const badges = el.cations.map(c => `<span class="inline-block bg-sky-500/20 border border-sky-400/40 text-sky-200 px-2 py-0.5 rounded mr-1 mt-1 font-semibold">${c.formula} – ${c.name}</span>`).join("");
+                cationHtml = `<div class="mt-1.5 text-slate-300">Kationtové skupiny: ${badges}</div>`;
+            }
+
+            detailContent.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-600 flex items-center justify-center shrink-0">
+                        <span class="text-xs font-bold text-white">${el.symbol}</span>
+                    </div>
+                    <div>
+                        <div class="font-bold text-sm text-white">${el.name} (Z = ${el.z})</div>
+                        ${cationHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function normalizeStr(str) {
+            return str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        }
+
+        function checkAnswer(submittedText) {
+            if (!state.currentItem) return;
+            const targetEl = ELEMENTS.find(e => e.z === state.currentItem);
+            const cleanInput = normalizeStr(submittedText);
+            const cleanSymbol = normalizeStr(targetEl.symbol);
+            const cleanName = normalizeStr(targetEl.name);
+
+            state.attempts++;
+
+            if (cleanInput === cleanSymbol || cleanInput === cleanName) {
+                // Správně
+                state.correctHits++;
+                state.streak++;
+                state.solvedZ.add(targetEl.z);
+                state.queue.shift();
+
+                feedbackMessage.innerHTML = `<span class="text-emerald-400 font-semibold">Správně! To byl ${targetEl.name} (${targetEl.symbol}).</span>`;
+                nextQuestion();
+                updateStats();
+            } else {
+                // Špatně
+                state.streak = 0;
+                feedbackMessage.innerHTML = `<span class="text-rose-400 font-semibold">Nesprávně. Zkus to znovu nebo využij nápovědu.</span>`;
+                updateStats();
+                userInput.focus();
+            }
+        }
+
+        answerForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            checkAnswer(userInput.value);
+        });
+
+        function renderTable() {
+            ptableContainer.innerHTML = "";
+
+            const corner = document.createElement('div');
+            corner.className = "flex items-center justify-center text-[10px] text-slate-500 font-bold";
+            corner.textContent = "P\\S";
+            ptableContainer.appendChild(corner);
+
+            for (let col = 1; col <= 18; col++) {
+                const colHeader = document.createElement('div');
+                colHeader.className = "flex flex-col items-center justify-center py-1 rounded-lg bg-slate-800/50 text-center";
+                colHeader.innerHTML = `
+                    <span class="text-[11px] font-bold text-slate-300 leading-none">${col}</span>
+                    <span class="text-[9px] text-slate-400 leading-tight mt-0.5">${ROMAN_GROUPS[col - 1]}</span>
+                `;
+                ptableContainer.appendChild(colHeader);
+            }
+
+            const posMap = new Map();
+            ELEMENTS.forEach(el => {
+                posMap.set(`${el.row}-${el.col}`, el);
+            });
+
+            const rowsToRender = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+            rowsToRender.forEach(row => {
+                if (row === 8) {
+                    const spacer = document.createElement('div');
+                    spacer.style.gridColumn = "1 / span 19";
+                    spacer.className = "h-3";
+                    ptableContainer.appendChild(spacer);
+                    return;
+                }
+
+                const rowHeader = document.createElement('div');
+                rowHeader.className = "flex items-center justify-center rounded-lg bg-slate-800/50 text-xs font-bold text-slate-400";
+                rowHeader.textContent = row <= 7 ? row : (row === 9 ? "6*" : "7*");
+                ptableContainer.appendChild(rowHeader);
+
+                for (let col = 1; col <= 18; col++) {
+                    if ((row === 6 && col === 3) || (row === 7 && col === 3)) {
+                        const placeholder = document.createElement('div');
+                        placeholder.className = "element-cell rounded-lg border border-dashed border-slate-700 flex flex-col items-center justify-center text-center p-1 bg-slate-800/30 text-slate-400";
+                        placeholder.innerHTML = `
+                            <span class="text-[9px] font-semibold">${row === 6 ? "57–71" : "89–103"}</span>
+                            <span class="text-[9px] leading-tight">${row === 6 ? "La–Lu" : "Ac–Lr"}</span>
+                        `;
+                        ptableContainer.appendChild(placeholder);
+                        continue;
+                    }
+
+                    const el = posMap.get(`${row}-${col}`);
+                    if (!el) {
+                        const emptyCell = document.createElement('div');
+                        ptableContainer.appendChild(emptyCell);
+                        continue;
+                    }
+
+                    const inScope = isElementInScope(el);
+                    const isSolved = state.solvedZ.has(el.z);
+                    const isTarget = inScope && state.currentItem === el.z;
+
+                    const cell = document.createElement('div');
+                    let classes = "element-cell rounded-lg border flex flex-col justify-between p-1 cursor-pointer ";
+
+                    if (isSolved) {
+                        classes += `cat-solved cat-${el.category} `;
+                    } else if (isTarget) {
+                        classes += "target-highlight ";
+                    } else {
+                        classes += "bg-slate-800/70 border-slate-700/80 ";
+                    }
+
+                    if (!inScope) {
+                        classes += "opacity-20 ";
+                    }
+
+                    cell.className = classes;
+
+                    let zText = isSolved ? el.z : "";
+                    let centerSymbol = isSolved ? el.symbol : (isTarget ? "❓" : "");
+                    let bottomName = isSolved ? el.name : "";
+                    const hasCationBadge = el.cations.length > 0;
+
+                    cell.innerHTML = `
+                        <div class="flex items-center justify-between w-full leading-none">
+                            <span class="text-[9px] font-semibold text-slate-300/90">${zText}</span>
+                            ${hasCationBadge && isSolved ? `<span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>` : ""}
+                        </div>
+                        <div class="text-center font-extrabold text-xs md:text-sm leading-none tracking-tight ${isSolved ? 'text-white' : 'text-sky-300'}">
+                            ${centerSymbol}
+                        </div>
+                        <div class="text-[8px] text-center truncate w-full leading-none text-slate-200/90 font-medium">
+                            ${bottomName}
+                        </div>
+                    `;
+
+                    cell.addEventListener('click', () => {
+                        showElementDetails(el);
+                        if (isTarget) {
+                            userInput.focus();
+                        }
+                    });
+
+                    ptableContainer.appendChild(cell);
+                }
+            });
+        }
+
+        hintBtn.addEventListener('click', () => {
+            if (!state.currentItem) return;
+            const el = ELEMENTS.find(e => e.z === state.currentItem);
+            state.hintLevel++;
+            targetSubHint.classList.remove('hidden');
+
+            if (state.hintLevel === 1) {
+                targetSubHint.textContent = `Nápověda 1: Český název prvku je "${el.name}".`;
+            } else {
+                targetSubHint.textContent = `Nápověda 2: Značka prvku je "${el.symbol}" (protonové číslo Z = ${el.z}).`;
+            }
+        });
+
+        skipBtn.addEventListener('click', () => {
+            if (!state.currentItem) return;
+            const skipped = state.queue.shift();
+            state.queue.push(skipped);
+            const el = ELEMENTS.find(e => e.z === skipped);
+            feedbackMessage.innerHTML = `<span class="text-amber-300">Přeskočeno: Na blikajícím políčku byl ${el.name} (${el.symbol}). Zkusíme ho znovu později.</span>`;
+            nextQuestion();
+        });
+
+        scopeSelect.addEventListener('change', (e) => {
+            state.scope = e.target.value;
+            buildQueue();
+        });
+
+        restartBtn.addEventListener('click', () => {
+            buildQueue();
+        });
+
+        window.onload = () => {
+            buildQueue();
+        };
+    </script>
+</body>
+</html>
